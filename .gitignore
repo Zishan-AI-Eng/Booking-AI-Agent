@@ -1,0 +1,84 @@
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+vendor/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.venv/
+venv/
+env/
+ENV/
+
+# Frontend build and tooling output
+dist/
+build/
+.next/
+.nuxt/
+.output/
+.svelte-kit/
+.astro/
+.vite/
+.cache/
+.parcel-cache/
+.turbo/
+coverage/
+.nyc_output/
+storybook-static/
+*.tsbuildinfo
+
+# Backend runtime, databases, and generated files
+*.log
+logs/
+*.sqlite
+*.sqlite3
+*.db
+instance/
+uploads/
+media/
+staticfiles/
+
+# Package manager files generated locally
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# Test and coverage output
+.coverage
+.coverage.*
+htmlcov/
+.hypothesis/
+.tox/
+
+# IDE and editor files
+.idea/
+.vscode/
+!.vscode/settings.example.json
+*.swp
+*.swo
+*~
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Secrets, certificates, and local configuration
+*.pem
+*.key
+*.crt
+*.p12
+*.secret
+*.local
