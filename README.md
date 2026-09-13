@@ -12,10 +12,13 @@ pip install -r requirements.txt
 $env:GROQ_API_KEY = "your-groq-api-key"
 # Optional: use another model available to your Groq account
 $env:GROQ_MODEL = "openai/gpt-oss-20b"
+$env:BREVO_API_KEY = "your-brevo-api-key"
+$env:EMAIL_SENDER = "verified-sender@example.com"
+$env:EMAIL_SENDER_NAME = "US-Duct"
 uvicorn app.main:app --reload --port 8000
 ```
 
-The calendar and email services are intentionally mocked/in-memory for this MVP. The LLM is the only live integration and uses `ChatGroq`.
+The calendar remains mocked/in-memory for this MVP. Confirmation emails use Brevo's free transactional email API when `BREVO_API_KEY` and a verified `EMAIL_SENDER` are configured. Without those variables, the booking result reports `not_configured` instead of falsely claiming delivery.
 
 The graph stores LangChain messages per `session_id`. The chatbot node answers normal questions directly; LangGraph routes to `get_available_slots` only after explicit booking agreement, then routes to `book_appointment_and_send_email` only after a selected slot.
 

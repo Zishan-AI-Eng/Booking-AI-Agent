@@ -44,7 +44,7 @@ def test_selected_slot_books_and_simulates_email():
         )
     )
     assert payload["meet_link"].startswith("https://meet.google.com/")
-    assert payload["email_status"] == "simulated_sent"
+    assert payload["email_status"] in {"sent", "not_configured", "failed"}
     assert BOOKINGS[-1]["email"] == "ava@example.com"
 
 
@@ -63,3 +63,14 @@ def test_booking_tool_requires_real_contact_details():
     schema = book_appointment_and_send_email.args_schema.model_json_schema()
     assert "name" in schema["required"]
     assert "email" in schema["required"]
+
+
+def test_booking_without_email_configuration_is_truthful(monkeypatch):
+    monkeypatch.delenv("BREVO_API_KEY", raising=False)
+    monkeypatch.delenv("EMAIL_SENDER", raising=False)
+    payload = json.loads(
+        book_appointment_and_send_email.func(
+            "2026-09-15T14:00:00+00:00", "Ava Khan", "ava@example.com"
+        )
+    )
+    assert payload["email_status"] == "not_configured"

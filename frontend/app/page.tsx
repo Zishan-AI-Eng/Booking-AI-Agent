@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 
 type Message = { role: "user" | "assistant"; content: string };
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -14,16 +15,40 @@ export default function Home() {
   const [sessionId, setSessionId] = useState<string>();
   const [messages, setMessages] = useState<Message[]>([welcomeMessage]);
   const [draft, setDraft] = useState("");
-  const [slots, setSlots] = useState<string[]>([]);
-  const [selectedSlot, setSelectedSlot] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const pendingTextRef = useRef("");
+  const displayedTextRef = useRef("");
+  const drainPromiseRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     if (open) messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, open]);
+
+  function updateAssistantText(content: string) {
+    setMessages((current) => {
+      const next = [...current];
+      const last = next.length - 1;
+      if (next[last]?.role === "assistant") next[last] = { ...next[last], content };
+      return next;
+    });
+  }
+
+  function drainAssistantText(): Promise<void> {
+    if (drainPromiseRef.current) return drainPromiseRef.current;
+    drainPromiseRef.current = (async () => {
+      while (pendingTextRef.current.length > 0) {
+        displayedTextRef.current += pendingTextRef.current.slice(0, 1);
+        pendingTextRef.current = pendingTextRef.current.slice(1);
+        updateAssistantText(displayedTextRef.current);
+        await new Promise((resolve) => window.setTimeout(resolve, 22));
+      }
+      drainPromiseRef.current = null;
+    })();
+    return drainPromiseRef.current;
+  }
 
   async function sendMessage(event?: FormEvent, override?: string) {
     event?.preventDefault();
@@ -33,6 +58,9 @@ export default function Home() {
     setMessages((current) => [...current, { role: "user", content: message }, { role: "assistant", content: "" }]);
     setDraft("");
     setBusy(true);
+    pendingTextRef.current = "";
+    displayedTextRef.current = "";
+    drainPromiseRef.current = null;
     try {
       const response = await fetch(`${API_URL}/api/chat/stream`, {
         method: "POST",
@@ -53,20 +81,13 @@ export default function Home() {
       const decoder = new TextDecoder();
       let buffer = "";
 
-      const handleEvent = (event: { type?: string; content?: string; detail?: string; session_id?: string; available_slots?: string[] }) => {
+      const handleEvent = (event: { type?: string; content?: string; detail?: string; session_id?: string }) => {
         if (event.type === "start" && event.session_id) setSessionId(event.session_id);
         if (event.type === "token" && event.content) {
-          setMessages((current) => {
-            const next = [...current];
-            const last = next.length - 1;
-            if (next[last]?.role === "assistant") next[last] = { ...next[last], content: next[last].content + event.content };
-            return next;
-          });
+          pendingTextRef.current += event.content;
+          void drainAssistantText();
         }
-        if (event.type === "done") {
-          if (event.session_id) setSessionId(event.session_id);
-          setSlots(event.available_slots ?? []);
-        }
+        if (event.type === "done" && event.session_id) setSessionId(event.session_id);
         if (event.type === "error") throw new Error(event.detail ?? "The assistant could not complete the request.");
       };
 
@@ -77,10 +98,11 @@ export default function Home() {
         buffer = events.pop() ?? "";
         for (const rawEvent of events) {
           const data = rawEvent.split("\n").find((line) => line.startsWith("data: "))?.slice(6);
-          if (data) handleEvent(JSON.parse(data) as { type?: string; content?: string; detail?: string; session_id?: string; available_slots?: string[] });
+          if (data) handleEvent(JSON.parse(data) as { type?: string; content?: string; detail?: string; session_id?: string });
         }
         if (done) break;
       }
+      await drainAssistantText();
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Unknown request error";
       setMessages((current) => {
@@ -98,8 +120,6 @@ export default function Home() {
   function resetConversation() {
     setSessionId(undefined);
     setMessages([welcomeMessage]);
-    setSlots([]);
-    setSelectedSlot("");
     setName("");
     setEmail("");
   }
@@ -137,11 +157,9 @@ export default function Home() {
         <section className="widget" aria-label="US-Duct assistant">
           <header className="widget-header"><div className="widget-title"><span className="widget-avatar">UD</span><div><strong>US-Duct assistant</strong><small><i /> Usually replies instantly</small></div></div><div className="widget-actions"><button onClick={resetConversation} aria-label="Start a new conversation" title="New conversation">↻</button><button onClick={() => setOpen(false)} aria-label="Close assistant" title="Close">×</button></div></header>
           <div className="widget-messages" aria-live="polite">
-            {messages.map((message, index) => <div className={`widget-message ${message.role}`} key={`${message.role}-${index}`}><span className="message-avatar">{message.role === "assistant" ? "UD" : "YOU"}</span><p>{message.content}</p></div>)}
-            {busy && <div className="widget-message assistant"><span className="message-avatar">UD</span><p className="typing"><i /><i /><i /></p></div>}
+            {messages.map((message, index) => <div className={`widget-message ${message.role}`} key={`${message.role}-${index}`}><span className="message-avatar">{message.role === "assistant" ? "UD" : "YOU"}</span><div className="message-copy">{message.role === "assistant" ? (message.content ? <ReactMarkdown>{message.content}</ReactMarkdown> : <p className="typing"><i /><i /><i /></p>) : <p>{message.content}</p>}</div></div>)}
             <div ref={messagesEndRef} />
           </div>
-          {slots.length > 0 && <div className="widget-slots"><small>AVAILABLE TIMES / UTC</small><div>{slots.map((slot) => <button className={selectedSlot === slot ? "selected" : ""} key={slot} onClick={() => { setSelectedSlot(slot); setDraft(`I’d like the ${new Date(slot).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "UTC" })} slot.`); }}>{new Date(slot).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "UTC" })}</button>)}</div></div>}
           <div className="widget-details"><input value={name} onChange={(event) => setName(event.target.value)} placeholder="Name (when booking)" aria-label="Name" /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Work email (when booking)" aria-label="Work email" /></div>
           <form className="widget-composer" onSubmit={sendMessage}><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Ask about ductwork or dust collection..." aria-label="Message" /><button type="submit" disabled={busy || !draft.trim()} aria-label="Send message">↗</button></form>
           <div className="widget-footer">US-DUCT / INDUSTRIAL + COMMERCIAL PROJECTS</div>
