@@ -10,6 +10,8 @@ const welcomeMessage: Message = {
   content: "Hi, I’m the US-Duct project assistant. What are you working on?",
 };
 
+
+
 export default function Home() {
   const [open, setOpen] = useState(false);
   const [sessionId, setSessionId] = useState<string>();
